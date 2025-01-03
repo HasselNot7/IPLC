@@ -55,7 +55,7 @@ python train_source.py --config "./config/train2d_source.cfg"
 4. Adapt the source model to the target domain, for instance, you can adapt the source model to domain B on the M&MS dataset:
 
 ```
-python adapt_mian.py --config "./config/adapt.cfg"
+python adapt_main.py --config "./config/adapt.cfg"
 ```
 ## Citation
 If you find this project useful for your research, please consider citing:
