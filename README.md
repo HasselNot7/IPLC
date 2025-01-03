@@ -1,5 +1,5 @@
-## IPLC
-
+## IPLC: Iterative Pseudo Label Correction Guided by SAM for Source-Free Domain Adaptation in Medical Image Segmentation (MICCAI 2024 early accept)
+![](./IPLC.png)
 
 ## 👉 Requirements
 Non-exhaustive list:
@@ -57,6 +57,18 @@ python train_source.py --config "./config/train2d_source.cfg"
 ```
 python adapt_mian.py --config "./config/adapt.cfg"
 ```
+## Citation
+If you find this project useful for your research, please consider citing:
 
+```bibtex
+@inproceedings{zhang2024iplc,
+  title={IPLC: iterative pseudo label correction guided by SAM for source-free domain adaptation in medical image segmentation},
+  author={Zhang, Guoning and Qi, Xiaoran and Yan, Bo and Wang, Guotai},
+  booktitle={International Conference on Medical Image Computing and Computer-Assisted Intervention},
+  pages={351--360},
+  year={2024},
+  organization={Springer}
+}
+``` 
 ## 🤝 Acknowledgement
 - Thanks to the open-source of the following projects: [Segment Anything](https://github.com/facebookresearch/segment-anything); [SAM-Med2D](https://github.com/cv-chaitali/SAM-Med2D)
