@@ -2,9 +2,9 @@
 This is the official pytorch implementation of our MICCAI 2024 paper "IPLC: Iterative Pseudo Label Correction Guided by SAM for Source-Free Domain Adaptation in Medical Image Segmentation" and extended journal version "IPLC+: SAM-Guided Iterative Pseudo Label Correction for Source-Free Domain Adaptation in Medical Image Segmentation".
 
 ## To do
-- [ ] IPLC+ code and weights
-- [x] IPLC pre-training code and weights
- (MICCAI 2024 early accept)
+- [ ] IPLC+ code
+- [x] IPLC code
+
 ![](./IPLC.png)
 
 ## 👉 Requirements
