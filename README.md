@@ -24,6 +24,9 @@ Non-exhaustive list:
 
 ## 👉 Usage
 1. Download the [M&MS Dataset](http://www.ub.edu/mnms), and organize the dataset directory structure as follows:
+   
+   The organized M&MS dataset can be downloaded at [Baidu Netdisk](https://pan.baidu.com/s/1ustJYI2V2qh-ZZLNu9R-WQ?pwd=2023).
+
 ```
 your/data_root/
        train/
@@ -78,3 +81,4 @@ If you find this project useful for your research, please consider citing:
 ``` 
 ## 🤝 Acknowledgement
 - Thanks to the open-source of the following projects: [Segment Anything](https://github.com/facebookresearch/segment-anything); [SAM-Med2D](https://github.com/cv-chaitali/SAM-Med2D)
+
