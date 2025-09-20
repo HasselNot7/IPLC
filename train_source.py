@@ -101,7 +101,7 @@ def train(config, train_loader, valid_loader, test_loader, target, list_data, cu
     return list_data
 
 
-def mian():
+def main():
     # load config
     save_path = "train_source"
     current_date = time.strftime("%Y%m%d", time.localtime())
@@ -131,4 +131,4 @@ def mian():
         
 if __name__ == '__main__':
     set_random()
-    mian()
+    main()
