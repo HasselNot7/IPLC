@@ -122,9 +122,7 @@ def train(config, train_loader, valid_loader, test_loader, target, list_data, sa
     return list_data
 
 
-
-def mian():
-
+def main():
     save_path_source = "IPLC"
     now = datetime.now()
     save_path = os.path.join(save_path_source, now.strftime('%Y-%m-%d_%H-%M-%S'))
@@ -164,4 +162,4 @@ def mian():
 
 if __name__ == '__main__':
     set_random()
-    mian()
+    main()
