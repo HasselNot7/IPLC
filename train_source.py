@@ -112,7 +112,6 @@ def train(config, train_loader, valid_loader, test_loader, target, list_data, cu
                     val_bar.set_description('Validation')
                     val_bar.set_postfix(dice=one_case_dice)
                     count += 1
-                    print(f'Validation case {xt_name[0]} dice: {one_case_dice}')
             dice_mean = current_dice / (count + 1)
             writer.add_scalar('dice', dice_mean, epoch)
             if (current_dice / (count + 1)) > best_dice:
