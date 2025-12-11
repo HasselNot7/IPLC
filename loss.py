@@ -143,6 +143,7 @@ class DiceLoss(nn.Module):
             new_shape = [N*D, C, H, W]
             target = torch.transpose(target, 1, 2)
             target = torch.reshape(target, new_shape)
+            ent_dice_weight_map = torch.reshape(ent_dice_weight_map, new_shape)
 
         if one_hot:
             target = self.one_hot_encode(target)
@@ -150,6 +151,9 @@ class DiceLoss(nn.Module):
         class_wise_dice = []
         loss = 0.0
         for i in range(self.n_classes):
+            # print("inputs[:,i,:,:].shape:", inputs[:,i,:,:].shape)
+            # print("target[:,i,:,:].shape:", target[:,i,:,:].shape)
+            # print("ent_dice_weight_map shape:", ent_dice_weight_map.shape)
             diceloss = dice_loss(inputs[:,i,:,:], target[:,i,:,:], ent_dice_weight_map)
             class_wise_dice.append(diceloss)
             loss += diceloss

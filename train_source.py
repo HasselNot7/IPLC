@@ -13,6 +13,14 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 matplotlib.use('Agg')
 def get_data_loader(config,dataset,target):
+    """
+    构建训练、验证和测试数据加载器。
+    参数：
+        config: 配置字典
+        dataset: 数据集名称
+        target: 目标域标识
+    返回：训练、验证、测试数据加载器
+    """
     batch_size = config['train']['batch_size']
     data_root_mms = config['train']['data_root_mms']
 
@@ -33,6 +41,19 @@ def get_data_loader(config,dataset,target):
     return train_loader,valid_loader,test_loader
 
 def train(config, train_loader, valid_loader, test_loader, target, list_data, current_date, save_path):
+    """
+    训练主流程，包括模型训练、验证、保存最优模型、测试。
+    参数：
+        config: 配置字典
+        train_loader: 训练数据加载器
+        valid_loader: 验证数据加载器
+        test_loader: 测试数据加载器
+        target: 目标域标识
+        list_data: 记录信息列表
+        current_date: 当前日期字符串
+        save_path: 保存路径
+    返回：更新后的list_data
+    """
     writer = SummaryWriter(
         log_dir=save_path + "/tensorboard/" + '/' + str(target) + '/' + current_date, comment='')
     directory_path = save_path + '/txt/' + str(target) + '/' + current_date
@@ -58,20 +79,24 @@ def train(config, train_loader, valid_loader, test_loader, target, list_data, cu
     best_dice = 0.
     for epoch in range(num_epochs):
         iplc_model.train()
-        print('Epoch [%d/%d]' %(epoch, num_epochs))
         current_loss = 0.
-        for i, (B, B_label, _,_) in tqdm(enumerate(train_loader)):
+        train_bar = tqdm(enumerate(train_loader), total=len(train_loader))
+        for i, (B, B_label, _,_) in train_bar:
             B = B.to(device).detach()
             B_label = B_label.to(device).detach()
             loss_seg = iplc_model.train_source(B,B_label)
             current_loss += loss_seg
+            train_bar.set_description(f'Epoch [{epoch}/{num_epochs}]')
+            train_bar.set_postfix(loss=loss_seg)
         loss_mean = current_loss / (i + 1)
         writer.add_scalar('loss', loss_mean, epoch)
-        if (epoch) % valid_epochs == 0:
+        if (epoch+1) % valid_epochs == 0:
             current_dice = 0.
+            count = -1
             with torch.no_grad():
                 iplc_model.eval()
-                for it,(xt,xt_label,xt_name,lab_Imag) in tqdm(enumerate(valid_loader)):
+                val_bar = tqdm(enumerate(valid_loader), total=len(valid_loader))
+                for it,(xt,xt_label,xt_name,lab_Imag) in val_bar:
                     xt = xt.to(device)
                     xt_label = xt_label.numpy().squeeze().astype(np.uint8)
                     output = iplc_model.test_with_name(xt)
@@ -84,10 +109,14 @@ def train(config, train_loader, valid_loader, test_loader, target, list_data, cu
                     one_case_dice = np.array(one_case_dice)
                     one_case_dice = np.mean(one_case_dice,axis=0) 
                     current_dice += one_case_dice
-            dice_mean = current_dice / (it + 1)
+                    val_bar.set_description('Validation')
+                    val_bar.set_postfix(dice=one_case_dice)
+                    count += 1
+                    print(f'Validation case {xt_name[0]} dice: {one_case_dice}')
+            dice_mean = current_dice / (count + 1)
             writer.add_scalar('dice', dice_mean, epoch)
-            if (current_dice / (it+1)) > best_dice:
-                best_dice = current_dice / (it+1)
+            if (current_dice / (count + 1)) > best_dice:
+                best_dice = current_dice / (count + 1)
                 model_dir = save_path + "/model/" + str(exp_name + '_' + target) + '/' + current_date
                 if not os.path.exists(model_dir):
                     os.makedirs(model_dir)
@@ -102,6 +131,9 @@ def train(config, train_loader, valid_loader, test_loader, target, list_data, cu
 
 
 def main():
+    """
+    主函数，加载配置，循环训练各目标域，保存结果。
+    """
     # load config
     save_path = "train_source"
     current_date = time.strftime("%Y%m%d", time.localtime())
@@ -115,7 +147,7 @@ def main():
     print(config)
     dataset = config['train']['dataset']
     for dataset in ['mms']:
-        for target in ['B','C','D']:
+        for target in ['B']:
             config['train']['dataset'] = dataset
             list_data.append(dataset)
             list_data.append(target)
@@ -130,5 +162,6 @@ def main():
                     file.write(line + "\n")
         
 if __name__ == '__main__':
+    # 设置随机种子，保证实验可复现
     set_random()
     main()
