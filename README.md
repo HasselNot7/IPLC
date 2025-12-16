@@ -61,11 +61,29 @@ The network takes nii files as an input. The gt folder contains gray-scale image
 python train_source.py --config "./config/train2d_source.cfg"
 ```
 
+    To continue a stopped run, point to the latest checkpoint and reuse the same `run_id` (usually the date folder in `train_source/model/<exp_name>_<target>/`):
+
+```
+python train_source.py \
+  --config ./config/train_source.cfg \
+  --run_id 20251212 \
+  --resume_path train_source/model/source_2D_A/20251212/checkpoint-latest.pth
+```
+
+    You can also set `run_id`, `resume_path`, or `auto_resume=True` inside `[train]` in `config/train_source.cfg` if you prefer configuration-driven control.
+
 4. Adapt the source model to the target domain, for instance, you can adapt the source model to domain B on the M&MS dataset:
 
 ```
 python adapt_main.py --config "./config/adapt.cfg"
 ```
+
+### Speed & stability tips
+
+- **`num_workers` / `pin_memory`** (new entries in `config/adapt.cfg`) let you overlap disk I/O with GPU compute. Increase `num_workers` if your CPU has free cores.
+- **`cache_pseudo_labels`** persists the SAM-generated pseudo labels in `IPLC/<timestamp>/pl` and reuses them in later epochs/targets, saving most of the 15s/iteration overhead. Delete the cached `.npy` files if you want to regenerate them.
+- **`sample_times`** is still the dominant knob for accuracy/speed—start small (e.g., 4) to verify the pipeline, then raise it if time allows.
+
 ## Citation
 If you find this project useful for your research, please consider citing:
 

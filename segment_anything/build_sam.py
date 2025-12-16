@@ -9,6 +9,16 @@ from functools import partial
 from .modeling import ImageEncoderViT, MaskDecoder, PromptEncoder, Sam, TwoWayTransformer
 from torch.nn import functional as F
 
+
+def _load_checkpoint(checkpoint_path):
+    """Load checkpoints safely across torch versions."""
+    load_kwargs = {"map_location": "cpu"}
+    try:
+        return torch.load(checkpoint_path, weights_only=False, **load_kwargs)
+    except TypeError:
+        # weights_only argument not supported (older torch), retry without it
+        return torch.load(checkpoint_path, **load_kwargs)
+
 def build_sam_vit_h(args):
     return _build_sam(
         encoder_embed_dim=1280,
@@ -109,8 +119,7 @@ def _build_sam(
     )
     # sam.train()
     if checkpoint is not None:
-        with open(checkpoint, "rb") as f:
-            state_dict = torch.load(f, map_location="cpu")
+        state_dict = _load_checkpoint(checkpoint)
         try:
             if 'model' in state_dict.keys():
                 print(encoder_adapter)

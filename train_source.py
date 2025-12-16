@@ -12,6 +12,43 @@ import time
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 matplotlib.use('Agg')
+
+
+def ensure_dir(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+
+def save_training_state(model, checkpoint_path, epoch, best_dice, best_model_path):
+    state = {
+        'epoch': epoch,
+        'best_dice': best_dice,
+        'best_model_path': best_model_path,
+        'model_state': model.state_dict(),
+        'enc_opt': model.enc_opt.state_dict(),
+        'aux_opt': model.aux_dec1_opt.state_dict(),
+        'enc_sched': model.enc_opt_sch.state_dict(),
+        'aux_sched': model.dec_1_opt_sch.state_dict(),
+    }
+    torch.save(state, checkpoint_path)
+
+
+def load_training_state(model, checkpoint_path, device):
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model_state = checkpoint.get('model_state', checkpoint)
+    model.load_state_dict(model_state, strict=False)
+    has_optimizer = 'enc_opt' in checkpoint and 'aux_opt' in checkpoint
+    if has_optimizer:
+        model.enc_opt.load_state_dict(checkpoint['enc_opt'])
+        model.aux_dec1_opt.load_state_dict(checkpoint['aux_opt'])
+    if 'enc_sched' in checkpoint:
+        model.enc_opt_sch.load_state_dict(checkpoint['enc_sched'])
+    if 'aux_sched' in checkpoint:
+        model.dec_1_opt_sch.load_state_dict(checkpoint['aux_sched'])
+    start_epoch = checkpoint.get('epoch', -1) + 1 if has_optimizer else 0
+    best_dice = checkpoint.get('best_dice', 0.)
+    best_model_path = checkpoint.get('best_model_path')
+    return start_epoch, best_dice, best_model_path, has_optimizer
 def get_data_loader(config,dataset,target):
     """
     构建训练、验证和测试数据加载器。
@@ -40,7 +77,7 @@ def get_data_loader(config,dataset,target):
     test_loader = DataLoader(test_dataset, batch_size=1,shuffle=False, drop_last=False)
     return train_loader,valid_loader,test_loader
 
-def train(config, train_loader, valid_loader, test_loader, target, list_data, current_date, save_path):
+def train(config, train_loader, valid_loader, test_loader, target, list_data, run_id, save_path, resume_checkpoint=None):
     """
     训练主流程，包括模型训练、验证、保存最优模型、测试。
     参数：
@@ -50,18 +87,17 @@ def train(config, train_loader, valid_loader, test_loader, target, list_data, cu
         test_loader: 测试数据加载器
         target: 目标域标识
         list_data: 记录信息列表
-        current_date: 当前日期字符串
+    run_id: 当前运行标识（通常为日期字符串）
         save_path: 保存路径
     返回：更新后的list_data
     """
     writer = SummaryWriter(
-        log_dir=save_path + "/tensorboard/" + '/' + str(target) + '/' + current_date, comment='')
-    directory_path = save_path + '/txt/' + str(target) + '/' + current_date
+        log_dir=os.path.join(save_path, "tensorboard", str(target), run_id), comment='')
+    directory_path = os.path.join(save_path, 'txt', str(target), run_id)
+    ensure_dir(directory_path)
     file_path = os.path.join(directory_path, f'{target}.txt')
-    if not os.path.exists(directory_path):
-        os.makedirs(directory_path)
     with open(file_path, 'w') as file:
-        file.write(current_date + "\n")
+        file.write(run_id + "\n")
     # load exp_name
     exp_name = config['train']['exp_name']
     dataset = config['train']['dataset']
@@ -70,14 +106,35 @@ def train(config, train_loader, valid_loader, test_loader, target, list_data, cu
     device = torch.device('cuda:{}'.format(config['train']['gpu']))
     iplc_model = UNet(config).to(device)
     iplc_model.train()
-    iplc_model.initialize()
-    print("model initialize")
+
+    model_dir = os.path.join(save_path, "model", f"{exp_name}_{target}", run_id)
+    ensure_dir(model_dir)
+    checkpoint_path = os.path.join(model_dir, 'checkpoint-latest.pth')
+    auto_resume = config['train'].get('auto_resume', False)
+    if resume_checkpoint is None and auto_resume and os.path.exists(checkpoint_path):
+        resume_checkpoint = checkpoint_path
+
+    start_epoch = 0
+    best_dice = 0.
+    best_model_path = None
+
+    if resume_checkpoint and os.path.isfile(resume_checkpoint):
+        print(f"[Resume] Loading checkpoint from {resume_checkpoint}")
+        start_epoch, best_dice, best_model_path, has_optimizer = load_training_state(
+            iplc_model, resume_checkpoint, device)
+        if has_optimizer:
+            print(f"[Resume] Continuing from epoch {start_epoch} with best dice {best_dice:.4f}")
+        else:
+            print('[Resume] Checkpoint has weights only. Starting from epoch 0.')
+            start_epoch = 0
+    else:
+        iplc_model.initialize()
+        print("model initialize")
     # load train details
     num_epochs = config['train']['num_epochs']
     valid_epochs = config['train']['valid_epoch']
     j = 0
-    best_dice = 0.
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, num_epochs):
         iplc_model.train()
         current_loss = 0.
         train_bar = tqdm(enumerate(train_loader), total=len(train_loader))
@@ -90,7 +147,7 @@ def train(config, train_loader, valid_loader, test_loader, target, list_data, cu
             train_bar.set_postfix(loss=loss_seg)
         loss_mean = current_loss / (i + 1)
         writer.add_scalar('loss', loss_mean, epoch)
-        if (epoch+1) % valid_epochs == 0:
+        if (epoch) % valid_epochs == 0:
             current_dice = 0.
             count = -1
             with torch.no_grad():
@@ -116,16 +173,31 @@ def train(config, train_loader, valid_loader, test_loader, target, list_data, cu
             writer.add_scalar('dice', dice_mean, epoch)
             if (current_dice / (count + 1)) > best_dice:
                 best_dice = current_dice / (count + 1)
-                model_dir = save_path + "/model/" + str(exp_name + '_' + target) + '/' + current_date
-                if not os.path.exists(model_dir):
-                    os.makedirs(model_dir)
-                best_epoch = '{}/model-{}-{}-{}.pth'.format(model_dir, 'best', str(epoch), best_dice)
-                torch.save(iplc_model.state_dict(), best_epoch)
+                best_model_path = '{}/model-{}-{}-{}.pth'.format(model_dir, 'best', str(epoch), best_dice)
+                torch.save(iplc_model.state_dict(), best_model_path)
                 torch.save(iplc_model.state_dict(), '{}/model-{}.pth'.format(model_dir, 'latest'))
+
+        save_training_state(iplc_model, checkpoint_path, epoch, best_dice, best_model_path)
     iplc_model.update_lr()
-    iplc_model.load_state_dict(torch.load(best_epoch,map_location='cpu'),strict=False)
+
+    final_model_path = None
+    if best_model_path and os.path.exists(best_model_path):
+        final_model_path = best_model_path
+    else:
+        latest_path = '{}/model-{}.pth'.format(model_dir, 'latest')
+        if os.path.exists(latest_path):
+            final_model_path = latest_path
+        elif resume_checkpoint and os.path.isfile(resume_checkpoint):
+            final_model_path = resume_checkpoint
+
+    if final_model_path and os.path.exists(final_model_path):
+        final_state = torch.load(final_model_path, map_location='cpu')
+        if isinstance(final_state, dict) and 'model_state' in final_state:
+            final_state = final_state['model_state']
+        iplc_model.load_state_dict(final_state, strict=False)
     iplc_model.eval()
-    test(config, iplc_model, valid_loader, test_loader, list_data, target, current_date, save_path)
+    # test(config, iplc_model, valid_loader, test_loader, list_data, target, run_id, save_path)
+    test(config, iplc_model, valid_loader, test_loader, list_data, target, save_path)
     return list_data
 
 
@@ -135,26 +207,42 @@ def main():
     """
     # load config
     save_path = "train_source"
-    current_date = time.strftime("%Y%m%d", time.localtime())
     parser = argparse.ArgumentParser(description='config file')
     parser.add_argument('--config', type=str, default="./config/train_source.cfg",
                         help='Path to the configuration file')
+    parser.add_argument('--resume_path', type=str, default=None,
+                        help='Checkpoint (.pth) path to resume training from (saves optimizer/lr states).')
+    parser.add_argument('--run_id', type=str, default=None,
+                        help='Identifier for this run (e.g., 20251212). Defaults to current date when omitted.')
     args = parser.parse_args()
-    config = args.config
-    config = parse_config(config)
+    config = parse_config(args.config)
+    resume_path_cfg = config['train'].get('resume_path')
+    resume_path = args.resume_path or resume_path_cfg
+    run_id = args.run_id or config['train'].get('run_id')
+    if resume_path and run_id is None:
+        run_id = os.path.basename(os.path.dirname(resume_path.rstrip('/')))
+    if not run_id:
+        run_id = time.strftime("%Y%m%d", time.localtime())
     list_data = []
     print(config)
     dataset = config['train']['dataset']
     for dataset in ['mms']:
-        for target in ['B']:
+        for target in ['D']:
             config['train']['dataset'] = dataset
             list_data.append(dataset)
             list_data.append(target)
             train_loader,valid_loader,test_loader = get_data_loader(config,dataset,target)
-            list_data = train(config, train_loader, valid_loader, test_loader, target, list_data, current_date, save_path)
-            directory_path = save_path + '/txt/' + str(target) + '/' + current_date
-            if not os.path.exists(directory_path):
-                os.makedirs(directory_path)
+            target_resume_path = None
+            if resume_path:
+                if '{target}' in resume_path:
+                    target_resume_path = resume_path.format(target=target)
+                else:
+                    target_resume_path = resume_path
+            list_data = train(
+                config, train_loader, valid_loader, test_loader,
+                target, list_data, run_id, save_path, resume_checkpoint=target_resume_path)
+            directory_path = os.path.join(save_path, 'txt', str(target), run_id)
+            ensure_dir(directory_path)
             file_path = os.path.join(directory_path, f'{target}.txt')
             with open(file_path, 'w') as file:
                 for line in list_data:

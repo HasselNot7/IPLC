@@ -363,6 +363,7 @@ class UNet(nn.Module):
         self.aux_dec1_opt.zero_grad()
 
         # 原代码没有传ent_dice_weight_map这个参数，导致报错
+        # 怎么写的？
         ent_dice_weight_map = torch.ones_like(self.labA, dtype=self.aux_seg_1.dtype)
 
         seg_loss_B = self.segloss(self.aux_seg_1,self.labA, ent_dice_weight_map, one_hot = True)

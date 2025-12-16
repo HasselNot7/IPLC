@@ -44,7 +44,7 @@ def train(config, train_loader, valid_loader, test_loader, target, list_data, sa
     device = torch.device('cuda:{}'.format(config['train']['gpu']))
     args.image_size = 256
     args.encoder_adapter = True
-    args.sam_checkpoint = "pretrain_model/sam-med2d_b.pth"
+    args.sam_checkpoint = "pretrain_model/sam_med2d/sam-med2d_b.pth"
     model = sam_model_registry["vit_b"](args).to(device)
     predictor = SammedPredictor(model)
 

@@ -29,7 +29,8 @@ def test(config, iplc_model, valid_loader, test_loader, list_data, target, save_
                 xt = xt.detach().cpu().numpy().squeeze()
                 output = output_.squeeze()
                 if config['test']['save_result']:
-                    lab_Imag = sitk.ReadImage(lab_Imag_dir[0])
+                    lab_path = lab_Imag_dir[0] if isinstance(lab_Imag_dir, (list, tuple)) else lab_Imag_dir
+                    lab_Imag = sitk.ReadImage(lab_path)
                     lab_arr = sitk.GetArrayFromImage(lab_Imag)
                     output_ = np.expand_dims(output_, axis=0)
                     if len(lab_arr.shape) == 4:
@@ -40,7 +41,13 @@ def test(config, iplc_model, valid_loader, test_loader, list_data, target, save_
                     zoom = [1, 1, b / bb, c / cc]
                     output_ = ndimage.zoom(output_, zoom, order=0)
                     output_ = output_.squeeze(0).astype(np.float64)
-                    name = str(xt_name)[2:-3]
+                    name = xt_name[0] if isinstance(xt_name, (list, tuple)) else xt_name
+                    if isinstance(name, bytes):
+                        name = name.decode()
+                    if not name.endswith('.nii') and not name.endswith('.nii.gz'):
+                        name = f"{name}.nii.gz"
+                    elif name.endswith('.nii'):
+                        name = f"{name}.gz"
                     results = save_path + '/nii/' + str(target)
                     if not os.path.exists(results):
                         os.makedirs(results)
@@ -48,9 +55,15 @@ def test(config, iplc_model, valid_loader, test_loader, list_data, target, save_
                     out_lab_obj = sitk.GetImageFromArray(output_)
                     out_lab_obj.CopyInformation(lab_Imag)
                     sitk.WriteImage(out_lab_obj, predict_dir)
-                lab_Imag = sitk.ReadImage(lab_Imag_dir)
+                lab_path = lab_Imag_dir[0] if isinstance(lab_Imag_dir, (list, tuple)) else lab_Imag_dir
+                lab_Imag = sitk.ReadImage(lab_path)
                 lab_arr = sitk.GetArrayFromImage(lab_Imag)
-                e, a, b, c = lab_arr.shape
+                if lab_arr.ndim == 4:
+                    _, b, c = lab_arr.shape
+                elif lab_arr.ndim == 3:
+                    b, c = lab_arr.shape[1:]
+                else:
+                    raise ValueError(f"Unexpected label dimensions: {lab_arr.shape}")
                 ee, bb, cc = output.shape
                 zoom = [1, b / bb, c / cc]
                 output = ndimage.zoom(output, zoom, order=0)
